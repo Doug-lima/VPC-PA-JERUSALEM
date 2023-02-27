@@ -200,6 +200,7 @@ resource "aws_security_group_rule" "app_server_sg_inbound_80" {
   security_group_id = aws_security_group.webserver.id ##Resource: aws_vpc_endpoint_security_group_association
 }
 
+# Criando Regra de saída
 resource "aws_security_group_rule" "app_server_sg_outbound" {
   type        = "egress"
   from_port   = 0
