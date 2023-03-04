@@ -17,15 +17,15 @@ data "aws_ami" "amazon-linux-2" {
   most_recent = true
 
   filter {
-   name   = "owner-alias"
-   values = ["amazon"]
- }
+    name   = "owner-alias"
+    values = ["amazon"]
+  }
 
 
- filter {
-   name   = "name"
-   values = ["amzn2-ami-hvm*"]
- }
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm*"]
+  }
 }
 
 # Create a VPC
@@ -54,10 +54,10 @@ resource "aws_subnet" "subnet1" {
 
 #Creat subnet private 
 resource "aws_subnet" "subnet2" {
-  vpc_id                  = aws_vpc.vpc_jerusalem.id
-  cidr_block              = "10.0.10.0/24"
-  availability_zone       = "us-east-1a"
-  map_public_ip_on_launch = true
+  vpc_id            = aws_vpc.vpc_jerusalem.id
+  cidr_block        = "10.0.10.0/24"
+  availability_zone = "us-east-1a"
+  #map_public_ip_on_launch = true
   tags = {
     Name = "private-subnet-1a"
     Type = "Private"
@@ -78,10 +78,10 @@ resource "aws_subnet" "subnet3" {
 
 #Creat subnet private 
 resource "aws_subnet" "subnet4" {
-  vpc_id                  = aws_vpc.vpc_jerusalem.id
-  cidr_block              = "10.0.20.0/24"
-  availability_zone       = "us-east-1b"
-  map_public_ip_on_launch = true
+  vpc_id            = aws_vpc.vpc_jerusalem.id
+  cidr_block        = "10.0.20.0/24"
+  availability_zone = "us-east-1b"
+  #map_public_ip_on_launch = true
   tags = {
     Name = "private-subnet-1b"
     Type = "Private"
@@ -240,6 +240,38 @@ resource "aws_security_group_rule" "app_server_sg_outbound" {
   security_group_id = aws_security_group.webserver.id
 }
 
+#Configurando target Group
+resource "aws_lb_target_group" "webserver" {
+  name     = "webserver-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.vpc_jerusalem.id
+
+}
+
+#Configurando load balancing / ELB (Elastic Load Balancing)
+resource "aws_lb" "alb1" {
+  name               = "webserver-application-lb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [aws_subnet.subnet1.id, aws_subnet.subnet3.id] #Network Mapping
+
+  enable_deletion_protection = false
+
+  /*
+  access_logs {
+    bucket  = aws_s3_bucket.lb_logs.bucket
+    prefix  = "test-lb"
+    enabled = true
+  }
+  */
+
+  tags = {
+    Environment = "Prod"
+  }
+}
+
 #Criando grupo de segurança do elb
 resource "aws_security_group" "alb" {
   name        = "alb"
@@ -264,57 +296,6 @@ resource "aws_security_group" "alb" {
   tags = {
     Name = "allow traffic"
   }
-}
-
-#Configurando lauch_template / EC2 aws_launch_template
-
-resource "aws_launch_template" "launchtemplate1" {
-  name          = "web"
-  image_id      = data.aws_ami.amazon-linux-2.id
-  instance_type = "t2.micro"
-  #key_name               = var.key_name
-  vpc_security_group_ids = [aws_security_group.webserver.id]
-  #associate_public_ip_address = true
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "VM CMS 1"
-    }
-  }
-  user_data = filebase64("${path.module}/ec2.userdata")
-}
-#Configurando load balancing / ELB (Elastic Load Balancing)
-
-resource "aws_lb" "alb1" {
-  name               = "alb1"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = [aws_subnet.subnet1.id, aws_subnet.subnet3.id]
-
-  enable_deletion_protection = false
-
-  /*
-  access_logs {
-    bucket  = aws_s3_bucket.lb_logs.bucket
-    prefix  = "test-lb"
-    enabled = true
-  }
-  */
-
-  tags = {
-    Environment = "Prod"
-  }
-}
-
-#Configurando target Group
-resource "aws_lb_target_group" "webserver" {
-  name     = "tf-example-lb-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.vpc_jerusalem.id
-
 }
 
 resource "aws_lb_listener" "front_end" {
@@ -344,12 +325,31 @@ resource "aws_lb_listener_rule" "rule1" {
   }
 }
 
-resource "aws_autoscaling_group" "asg" {
-  vpc_zone_identifier = [aws_subnet.subnet1.id, aws_subnet.subnet3.id]
+#Configurando lauch_template / EC2 aws_launch_template
+resource "aws_launch_template" "launchtemplate1" {
+  name          = "web"
+  image_id      = data.aws_ami.amazon-linux-2.id
+  instance_type = "t2.micro"
+  #key_name               = var.key_name
+  vpc_security_group_ids = [aws_security_group.webserver.id]
+  #associate_public_ip_address = true
 
-  desired_capacity = 2
-  max_size         = 6
-  min_size         = 2
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "VM CMS 1"
+    }
+  }
+  user_data = filebase64("${path.module}/ec2.userdata")
+}
+
+resource "aws_autoscaling_group" "asg" {
+  name                = "webserver-scaling-policy"
+  vpc_zone_identifier = [aws_subnet.subnet1.id, aws_subnet.subnet3.id] #Testes feitos na SUBNET PUBLICAS
+  health_check_type   = "ELB"
+  desired_capacity    = 2
+  max_size            = 6
+  min_size            = 2
 
   target_group_arns = [aws_lb_target_group.webserver.arn]
 
@@ -357,4 +357,19 @@ resource "aws_autoscaling_group" "asg" {
     id      = aws_launch_template.launchtemplate1.id
     version = "$Latest"
   }
+}
+resource "aws_autoscaling_policy" "web_cluster_target_tracking_policy" {
+name = "target-tracking-policy"
+policy_type = "TargetTrackingScaling"
+autoscaling_group_name = aws_autoscaling_group.asg.name
+estimated_instance_warmup = 200
+
+target_tracking_configuration {
+predefined_metric_specification {
+predefined_metric_type = "ASGAverageCPUUtilization"
+}
+
+    target_value = "60"
+
+}
 }
