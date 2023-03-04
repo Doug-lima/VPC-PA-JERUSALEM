@@ -343,6 +343,7 @@ resource "aws_launch_template" "launchtemplate1" {
   user_data = filebase64("${path.module}/ec2.userdata")
 }
 
+#Criação do ASG
 resource "aws_autoscaling_group" "asg" {
   name                = "webserver-scaling-policy"
   vpc_zone_identifier = [aws_subnet.subnet1.id, aws_subnet.subnet3.id] #Testes feitos na SUBNET PUBLICAS
@@ -358,18 +359,20 @@ resource "aws_autoscaling_group" "asg" {
     version = "$Latest"
   }
 }
-resource "aws_autoscaling_policy" "web_cluster_target_tracking_policy" {
-name = "target-tracking-policy"
-policy_type = "TargetTrackingScaling"
-autoscaling_group_name = aws_autoscaling_group.asg.name
-estimated_instance_warmup = 200
 
-target_tracking_configuration {
-predefined_metric_specification {
-predefined_metric_type = "ASGAverageCPUUtilization"
-}
+#Configuração da Politica de Escalabilidade automática
+resource "aws_autoscaling_policy" "web_cluster_target_tracking_policy" {
+  name                      = "target-tracking-policy"
+  policy_type               = "TargetTrackingScaling"
+  autoscaling_group_name    = aws_autoscaling_group.asg.name
+  estimated_instance_warmup = 200
+
+  target_tracking_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ASGAverageCPUUtilization"
+    }
 
     target_value = "60"
 
-}
+  }
 }
