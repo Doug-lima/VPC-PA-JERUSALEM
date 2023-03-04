@@ -12,10 +12,26 @@ provider "aws" {
   region = "us-east-1"
 }
 
+# Resource: aws_ec2_instance_state
+data "aws_ami" "amazon-linux-2" {
+  most_recent = true
+
+  filter {
+   name   = "owner-alias"
+   values = ["amazon"]
+ }
+
+
+ filter {
+   name   = "name"
+   values = ["amzn2-ami-hvm*"]
+ }
+}
+
 # Create a VPC
 resource "aws_vpc" "vpc_jerusalem" {
   cidr_block = "10.0.0.0/16"
- # enable_dns_hostnames = true
+  # enable_dns_hostnames = true
   tags = {
     Name      = "VPC PA Jerusalem"
     Owner     = "Douglas"
@@ -26,10 +42,10 @@ resource "aws_vpc" "vpc_jerusalem" {
 
 #Creat subnet public us-east-1a
 resource "aws_subnet" "subnet1" {
-  vpc_id            = aws_vpc.vpc_jerusalem.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "us-east-1a"
-
+  vpc_id                  = aws_vpc.vpc_jerusalem.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
   tags = {
     Name = "public-subnet-1a"
     Type = "Public"
@@ -38,10 +54,10 @@ resource "aws_subnet" "subnet1" {
 
 #Creat subnet private 
 resource "aws_subnet" "subnet2" {
-  vpc_id            = aws_vpc.vpc_jerusalem.id
-  cidr_block        = "10.0.10.0/24"
-  availability_zone = "us-east-1a"
-
+  vpc_id                  = aws_vpc.vpc_jerusalem.id
+  cidr_block              = "10.0.10.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
   tags = {
     Name = "private-subnet-1a"
     Type = "Private"
@@ -50,10 +66,10 @@ resource "aws_subnet" "subnet2" {
 
 #Creat subnet public us-east-1b
 resource "aws_subnet" "subnet3" {
-  vpc_id            = aws_vpc.vpc_jerusalem.id
-  cidr_block        = "10.0.2.0/24"
-  availability_zone = "us-east-1b"
-
+  vpc_id                  = aws_vpc.vpc_jerusalem.id
+  cidr_block              = "10.0.2.0/24"
+  availability_zone       = "us-east-1b"
+  map_public_ip_on_launch = true
   tags = {
     Name = "public-subnet-1b"
     Type = "Public"
@@ -62,10 +78,10 @@ resource "aws_subnet" "subnet3" {
 
 #Creat subnet private 
 resource "aws_subnet" "subnet4" {
-  vpc_id            = aws_vpc.vpc_jerusalem.id
-  cidr_block        = "10.0.20.0/24"
-  availability_zone = "us-east-1b"
-
+  vpc_id                  = aws_vpc.vpc_jerusalem.id
+  cidr_block              = "10.0.20.0/24"
+  availability_zone       = "us-east-1b"
+  map_public_ip_on_launch = true
   tags = {
     Name = "private-subnet-1b"
     Type = "Private"
@@ -253,24 +269,21 @@ resource "aws_security_group" "alb" {
 #Configurando lauch_template / EC2 aws_launch_template
 
 resource "aws_launch_template" "launchtemplate1" {
-  name = "web"
-
-  image_id      = "ami-09e67e426f25ce0d7"
-  instance_type = "t3a.small"
+  name          = "web"
+  image_id      = data.aws_ami.amazon-linux-2.id
+  instance_type = "t2.micro"
   #key_name               = var.key_name
   vpc_security_group_ids = [aws_security_group.webserver.id]
+  #associate_public_ip_address = true
 
   tag_specifications {
     resource_type = "instance"
-
     tags = {
-      Name = "VM CMS"
+      Name = "VM CMS 1"
     }
   }
-
   user_data = filebase64("${path.module}/ec2.userdata")
 }
-
 #Configurando load balancing / ELB (Elastic Load Balancing)
 
 resource "aws_lb" "alb1" {
@@ -296,7 +309,6 @@ resource "aws_lb" "alb1" {
 }
 
 #Configurando target Group
-
 resource "aws_lb_target_group" "webserver" {
   name     = "tf-example-lb-tg"
   port     = 80
@@ -327,8 +339,22 @@ resource "aws_lb_listener_rule" "rule1" {
 
   condition {
     path_pattern {
-      values = ["/*"]
+      values = ["/"]
     }
   }
 }
 
+resource "aws_autoscaling_group" "asg" {
+  vpc_zone_identifier = [aws_subnet.subnet1.id, aws_subnet.subnet3.id]
+
+  desired_capacity = 2
+  max_size         = 6
+  min_size         = 2
+
+  target_group_arns = [aws_lb_target_group.webserver.arn]
+
+  launch_template {
+    id      = aws_launch_template.launchtemplate1.id
+    version = "$Latest"
+  }
+}
