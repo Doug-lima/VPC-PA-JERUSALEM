@@ -216,8 +216,20 @@ resource "aws_security_group_rule" "app_server_sg_inbound_80" {
   security_group_id = aws_security_group.webserver.id ##Resource: aws_vpc_endpoint_security_group_association
 }
 
+# Criando Regra de entrada para liberar a porta 3389 // Resource: aws_security_group_rule
+resource "aws_security_group_rule" "app_server_sg_inbound_3389" {
+  description = "3389 from anywhere"
+  type        = "ingress"
+  from_port   = 3389
+  to_port     = 3389
+  protocol    = "tcp"
+  cidr_blocks = ["0.0.0.0/0"]
+  # ipv6_cidr_blocks  = [aws_vpc.vpc_terraform.ipv6_cidr_block]
+  security_group_id = aws_security_group.webserver.id ##Resource: aws_vpc_endpoint_security_group_association
+}
 
-# Criando Regra de entrada para liberar a porta 80 // Resource: aws_security_group_rule
+
+# Criando Regra de entrada para liberar a porta 443 // Resource: aws_security_group_rule
 resource "aws_security_group_rule" "app_server_sg_inbound_443" {
   description = "443 from anywhere"
   type        = "ingress"
