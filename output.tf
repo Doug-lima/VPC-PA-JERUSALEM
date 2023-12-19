@@ -5,6 +5,7 @@ output "arn" {
 output "public_ip" {
   value = aws_launch_template.launchtemplate1
 }
+
 */
 
 output "alb_dns_name" {
